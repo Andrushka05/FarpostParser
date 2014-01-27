@@ -1,12 +1,11 @@
-﻿using System.Xml;
-using System.Xml.Linq;
-using System.Xml.Serialization;
-using HtmlAgilityPack;
+﻿using System.Collections;
+using System.Data;
+using System.Data.OleDb;
+using System.Drawing;
+using System.Reflection;
+using System.Xml;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -15,6 +14,9 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Diagnostics;
+using System.Xml.Linq;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
 
 namespace FarpostParse
 {
@@ -32,7 +34,7 @@ namespace FarpostParse
         
         private void Open_Click(object sender, EventArgs e)
         {
-            FolderBrowserDialog fbd = new FolderBrowserDialog();
+            var fbd = new FolderBrowserDialog();
             if(fbd.ShowDialog() == DialogResult.OK)
             {
                 path.Text = fbd.SelectedPath;
@@ -41,17 +43,17 @@ namespace FarpostParse
 
         private void GetNameShop()
         {
-            WebClient client = new WebClient();
+            var client = new WebClient();
             
             var url = "http://vladivostok.farpost.ru/clothes/?owner=1217732";
-            Stream data = client.OpenRead(url);
-            StreamReader reader = new StreamReader(data, Encoding.GetEncoding("windows-1251"));
+            var data = client.OpenRead(url);
+            var reader = new StreamReader(data, Encoding.GetEncoding("windows-1251"));
             string s = reader.ReadToEnd();
             data.Close();
             reader.Close();
-            HtmlAgilityPack.HtmlDocument page=new HtmlAgilityPack.HtmlDocument();
+            var page=new HtmlAgilityPack.HtmlDocument();
             page.LoadHtml(s);
-            //if (page == null) return null;
+            
             var shopUl = page.DocumentNode.SelectNodes("//ul[contains(concat(' ', @id, ' '), ' owner_list ')]")[1];
             foreach (var il in shopUl.ChildNodes)
             {
@@ -85,69 +87,31 @@ namespace FarpostParse
                 var shop = shops[num];
                 label2.Text = "Осталось "+shop.CountProduct;
                 var countPage = Convert.ToInt32(shop.CountProduct)/50+1;
-                //загрузка страницы магазина
                 var catNew = new List<Category>();
                 var products = new List<Product>();
-                var productsAdd = new List<Product>();
                 var categories = new List<Category>();
-                if (File.Exists(path.Text + @"\categories.xml"))
-                {
-                    var temp = ReadXml(path.Text + @"\categories.xml");
-                    if (temp.Any())
-                        categories.AddRange(temp);
-                }
-                 
-                //if (File.Exists(path.Text + @"\products.xml"))
+                //if (File.Exists(path.Text + @"\categories.xml"))
                 //{
-                //    var temp = ReadXmlPr(path.Text + @"\products.xml");
-                //    //if (temp.Any())
-                //    //    productsAdd.AddRange(temp);
+                //    var temp = ReadXml(path.Text + @"\categories.xml");
+                //    if (temp.Any())
+                //        categories.AddRange(temp);
                 //}
-                List<TimeSpan> sts = new List<TimeSpan>();
-                Stopwatch st = new Stopwatch();
-                st.Start();
-               for (int j = 0; j < countPage; j++)
+                 
+                for (int j = 0; j < countPage; j++)
                {
-                    WebClient client = new WebClient();
+                    var client = new WebClient();
                     Stream data = client.OpenRead(j == 0 ? shop.Url : shop.Url + "&page=" + (j + 1).ToString());
-                    StreamReader reader = new StreamReader(data, Encoding.GetEncoding("windows-1251"));
+                    var reader = new StreamReader(data, Encoding.GetEncoding("windows-1251"));
                     string s = reader.ReadToEnd();
                     data.Close();
                     reader.Close();
                     var shopHtml = new HtmlAgilityPack.HtmlDocument();
                     shopHtml.LoadHtml(s);
 
-                    sts.Add(st.Elapsed);
-
                     var prLinks = new List<string>();
                     var productsTr =
                         shopHtml.DocumentNode.SelectNodes(
                             "//table[contains(concat(' ', @class, ' '), ' viewdirBulletinTable pageableContent ')]/tbody/tr");
-                    //if (j == 0)
-                    //{
-
-                    //    //<span class="pagebarInner"><strong class="page">1</strong><a href="/clothes/women/?owner=1453008&amp;page=2" class="page nextnumber">2</a>
-                    //    //<a href="/clothes/women/?owner=1453008&amp;page=3" class="page ">3</a><a href="/clothes/women/?owner=1453008&amp;page=4" class="page ">4</a><a href="/clothes/women/?owner=1453008&amp;page=5" class="page ">5</a><a href="/clothes/women/?owner=1453008&amp;page=6" class="page ">6</a><a href="/clothes/women/?owner=1453008&amp;page=7" class="page ">7</a><a href="/clothes/women/?owner=1453008&amp;page=8" class="page ">8</a>
-                    //    //<span>...</span>111 страниц			</span>
-                    //    var count = shopHtml.DocumentNode.SelectNodes("//*[@id='bulletins']/div[2]/div/span[contains(concat(' ', @class, ' '), ' pagebarInner ')]")[0];
-                    //    var t = count.InnerText.Replace("\t", "");
-                    //    //*[@id="bulletins"]/div[2]/div/span[1]
-                    //    if (!t.Contains("8"))
-                    //    {
-                    //        var str = Regex.Replace(t, @"[^\d]", "");
-                    //        var countP = Convert.ToInt32(str.Remove(0, str.Length - 1));
-                    //    }
-                    //    else
-                    //    {
-                    //        var str = t.Substring(t.IndexOf("8") + 1);
-                    //        str = Regex.Replace(str, @"[^\d]", "");
-                    //        //if (str != "")
-                    //        //    int countP = Convert.ToInt32(str);
-                    //        //else
-                    //        //    int countP = 8;
-                    //    }
-
-                    //}
                     
                     foreach (var product in productsTr)
                     {
@@ -163,9 +127,9 @@ namespace FarpostParse
                             }
                             HashSet<string> sd = new HashSet<string>(prLinks);
                             prLinks = sd.ToList();
+                            break;
                         }
                     }
-                    sts.Add(st.Elapsed);
                     foreach (var url in prLinks)
                     {
                         var wc = new WebClient();
@@ -190,7 +154,6 @@ namespace FarpostParse
                         var parentId = "";
                         var parentName = "";
 
-                        sts.Add(st.Elapsed);
                         foreach (var categ in categoryA)
                         {
                             var c = categories.FirstOrDefault(x => x.Name == categ.InnerText);
@@ -216,14 +179,13 @@ namespace FarpostParse
                         }
                         pr.CategoryId = parentId.Trim();
                         pr.CategoryName = parentName;
-                        sts.Add(st.Elapsed);
-                        var contentDiv =
-                            productHtml.DocumentNode.SelectNodes(
-                                "//div[contains(concat(' ', @id, ' '), ' content ')]/table/tr/td/div")[0];
+												//var contentDiv =
+												//		productHtml.DocumentNode.SelectNodes(
+												//				"//div[contains(concat(' ', @id, ' '), ' content ')]/table/tr/td/div")[0];
                         //<h1 class="subject">Кеды DVS Landmark		<span><nobr>
                         //(<span class="fieldSetCopyHide"><a href="#userInfo" class="ajaxLink" onclick="baza.scrollTo('.ownerInfo', {offset: -20}); return false">
                         //Advance			</a>, </span>Владивосток)</nobr></span></h1>
-                        var titleH1 = contentDiv.SelectNodes("//h1[contains(concat(' ', @class, ' '), ' subject ')]")[0];
+												var titleH1 = productHtml.DocumentNode.SelectNodes("//h1[contains(concat(' ', @class, ' '), ' subject ')]")[0];
                         pr.Name =
                             titleH1.InnerHtml.Substring(0, titleH1.InnerHtml.IndexOf("<span"))
                                 .Trim()
@@ -231,7 +193,7 @@ namespace FarpostParse
                                 .Replace("\t", "");
 
                         var priceDiv =
-                            contentDiv.SelectNodes("//div[contains(concat(' ', @class, ' '), ' field big ')]/div")[1];
+														productHtml.DocumentNode.SelectNodes("//div[contains(concat(' ', @class, ' '), ' field big ')]/div")[1];
 
                         if (priceDiv.InnerHtml.Contains("discountButtonFrame"))
                         {
@@ -243,24 +205,23 @@ namespace FarpostParse
 
                         //bulletinText
                         var descriptionP =
-                            contentDiv.SelectNodes("//div[contains(concat(' ', @class, ' '), ' bulletinText ')]")[0];
+														productHtml.DocumentNode.SelectNodes("//div[contains(concat(' ', @class, ' '), ' bulletinText ')]")[0];
                         if (descriptionP.InnerHtml.Contains("<p>"))
                         {
-                            pr.Description =
-                                descriptionP.ChildNodes[0].InnerText.Trim().Replace("\r\n", "").Replace("\t", "");
+                            //<p>Цвет: зеленый;<br>Размер (ДхШхВ) см.: 180x55:x;<br>Материал: Хлопок;<br>Артикул: 031;<br><br>Бесплатная доставка при покупке сумки</p>
+                            var str = descriptionP.InnerHtml;
+                            var begin = str.IndexOf("<p>");
+                            var end = str.IndexOf("</p>");
+                            var res = str.Substring(begin + 3, end - begin - 3).Trim().Replace("<br>","");
+                            pr.Description =res;
                         }
                         var preview = "";
 
                         //<img src="http://static.baza.farpost.ru/v/1364896377672_bulletin" imagewidth="640" imageheight="482" style="width: auto; height: 354px; margin: 0px 0px 0px 1px;"></a>
-
-                        //var ds = contentDiv.SelectNodes("//div[contains(concat(' ', @class, ' '), ' imagesEx ')]/a")[0];
-                        //var fotoImg = contentDiv.SelectNodes("//div[contains(concat(' ', @class, ' '), ' imagesEx ')]/a/img")[0];
                         var foto = new List<string>();
-                        //foto.Add(fotoImg.Attributes["src"].Value);
-                        //<div class="bulletinImages"><div class="image">
                         //<img src="http://static.baza.farpost.ru/v/1355615239833_bulletin" imagewidth="426" imageheight="640"></div></div>
                         var fotoDiv =
-                            contentDiv.SelectNodes(
+														productHtml.DocumentNode.SelectNodes(
                                 "//div[contains(concat(' ', @class, ' '), ' bulletinImages ')]/div/img");
 
                         if (fotoDiv != null)
@@ -279,54 +240,42 @@ namespace FarpostParse
                             for (int i = 0; i < foto.Count; i++)
                             {
                                 var image = new WebClient();
-
-                                pr.Photos.Add(pathFolder + i + ".jpg");
+                                pr.Photos.Add(pr.Id+ @"/" + i + ".jpg");
                                 client.DownloadFile(new Uri(foto[i]), pathFolder + i + ".jpg");
                             }
                         }
-                        sts.Add(st.Elapsed);
+                        
                         products.Add(pr);
-                        if (productsAdd.Any())
-                        {
-                            label2.Text = "Осталось " + (Convert.ToInt32(shop.CountProduct) - productsAdd.Count - products.Count).ToString();
-                            label2.Refresh();
-                        }
-                        else
-                        {
-                            label2.Text = "Осталось " + (Convert.ToInt32(shop.CountProduct) - products.Count).ToString();
-                            label2.Refresh();
-                        }
-                        sts.Add(st.Elapsed);
+                        label2.Text = "Осталось " + (Convert.ToInt32(shop.CountProduct) - products.Count).ToString();
+                        label2.Refresh();
+                        
                         if ((Convert.ToInt32(shop.CountProduct) - products.Count) == 0)
                             break;
                     }
                     
-                    if ((j == (countPage - 1) || j % 3 == 0) && (countPage > 1 && j != 0))
+                    if ((j == (countPage - 1) || j % 3 == 0))
                     {
-                        var sss = new HashSet<string>(products.Select(x => x.Name));
-                        var prNew = new List<Product>();
-                        foreach (var name in sss)
-                        {
-                            var pp = products.FirstOrDefault(x => x.Name == name);
-                            var pp1 = productsAdd.FirstOrDefault(x => x.Name == name);
-                            if (pp != null && pp1 == null)
-                                prNew.Add(pp);
+                        //var sss = new HashSet<string>(products.Select(x => x.Name));
+                        //var prNew = new List<Product>();
+                        //foreach (var name in sss)
+                        //{
+                        //    var pp = products.FirstOrDefault(x => x.Name == name);
+                        //    if (pp != null)
+                        //        prNew.Add(pp);
 
-                        }
+                        //}
 
-                        SaveProducts(prNew, path.Text + @"\products.xml");
-                        SaveCategory(catNew, path.Text + @"\categories.xml");
-                        productsAdd.AddRange(prNew);
-                        catNew = new List<Category>();
-                        products = new List<Product>();
-                        st.Stop();
-                        var rrrr = st.Elapsed;
+                        SaveProducts(products, path.Text + @"\products.xml");
+                        //if(catNew.Any())
+                            SaveCategory(catNew, path.Text + @"\categories.xml");
+                            
                     }
                 }
                 
             }
         }
 
+        
         public void SaveCategory(List<Category> c, string fileName)
         {
             XmlTextWriter textWritter = new XmlTextWriter(fileName, Encoding.UTF8);
@@ -338,27 +287,27 @@ namespace FarpostParse
             XmlDocument document = new XmlDocument();
             document.Load(fileName);
             XmlNode element = document.CreateElement("Categories");
-            document.DocumentElement.AppendChild(element); // указываем родителя
+            document.DocumentElement.AppendChild(element); 
             Parallel.ForEach(c, cat =>
             {
-                XmlNode e = document.CreateElement("Category"); // даём имя
+                XmlNode e = document.CreateElement("Category"); 
 
-                XmlNode subElement1 = document.CreateElement("Id"); // даём имя
-                subElement1.InnerText = cat.Id; // и значение
-                e.AppendChild(subElement1); // и указываем кому принадлежит
+                XmlNode subElement1 = document.CreateElement("Id"); 
+                subElement1.InnerText = cat.Id; 
+                e.AppendChild(subElement1); 
 
-                XmlNode subElement2 = document.CreateElement("Name"); // даём имя
-                subElement2.InnerText = cat.Name; // и значение
-                e.AppendChild(subElement2); // и указываем кому принадлежит
+                XmlNode subElement2 = document.CreateElement("Name"); 
+                subElement2.InnerText = cat.Name; 
+                e.AppendChild(subElement2);
 
-                XmlNode subElement3 = document.CreateElement("ParentId"); // даём имя
-                subElement3.InnerText = cat.ParentId; // и значение
-                e.AppendChild(subElement3); // и указываем кому принадлежит
+                XmlNode subElement3 = document.CreateElement("ParentId");
+                subElement3.InnerText = cat.ParentId;
+                e.AppendChild(subElement3); 
 
-                XmlNode subElement4 = document.CreateElement("ParentName"); // даём имя
-                subElement4.InnerText = cat.ParentName; // и значение
-                e.AppendChild(subElement4); // и указываем кому принадлежит
-                element.AppendChild(e); // и указываем кому принадлежит
+                XmlNode subElement4 = document.CreateElement("ParentName"); 
+                subElement4.InnerText = cat.ParentName; 
+                e.AppendChild(subElement4); 
+                element.AppendChild(e); 
             });
             document.Save(fileName);
         }
@@ -373,58 +322,56 @@ namespace FarpostParse
             XmlDocument document = new XmlDocument();
             document.Load(fileName);
             XmlNode element = document.CreateElement("Products");
-            document.DocumentElement.AppendChild(element); // указываем родителя
-            //XmlAttribute attribute = document.CreateAttribute("number"); // создаём атрибут
-            //attribute.Value = 1; // устанавливаем значение атрибута
-            //element.Attributes.Append(attribute); // добавляем атрибут
+            document.DocumentElement.AppendChild(element); 
+            
             Parallel.ForEach(p, pr => { 
             
-                XmlNode e = document.CreateElement("Product"); // даём имя
+                var e = document.CreateElement("Product"); 
 
-                XmlNode subElement1 = document.CreateElement("Id"); // даём имя
-                subElement1.InnerText = pr.Id; // и значение
-                e.AppendChild(subElement1); // и указываем кому принадлежит
+                var subElement1 = document.CreateElement("Id"); 
+                subElement1.InnerText = pr.Id; 
+                e.AppendChild(subElement1); 
 
-                XmlNode subElement2 = document.CreateElement("StoreId"); // даём имя
-                subElement2.InnerText = pr.StoreId; // и значение
-                e.AppendChild(subElement2); // и указываем кому принадлежит
+                var subElement2 = document.CreateElement("StoreId"); 
+                subElement2.InnerText = pr.StoreId; 
+                e.AppendChild(subElement2); 
 
-                XmlNode subElement3 = document.CreateElement("StoreName"); // даём имя
-                subElement3.InnerText = pr.StoreName; // и значение
-                e.AppendChild(subElement3); // и указываем кому принадлежит
+                var subElement3 = document.CreateElement("StoreName"); 
+                subElement3.InnerText = pr.StoreName; 
+                e.AppendChild(subElement3); 
 
-                XmlNode subElement4 = document.CreateElement("CategoryId"); // даём имя
-                subElement4.InnerText = pr.CategoryId; // и значение
-                e.AppendChild(subElement4); // и указываем кому принадлежит
+                var subElement4 = document.CreateElement("CategoryId"); 
+                subElement4.InnerText = pr.CategoryId; 
+                e.AppendChild(subElement4); 
 
-                XmlNode subElement5 = document.CreateElement("CategoryName"); // даём имя
-                subElement5.InnerText = pr.CategoryName; // и значение
-                e.AppendChild(subElement5); // и указываем кому принадлежит
+                XmlNode subElement5 = document.CreateElement("CategoryName"); 
+                subElement5.InnerText = pr.CategoryName; 
+                e.AppendChild(subElement5); 
 
-                XmlNode subElement6 = document.CreateElement("Name"); // даём имя
-                subElement6.InnerText = pr.Name; // и значение
-                e.AppendChild(subElement6); // и указываем кому принадлежит
+                XmlNode subElement6 = document.CreateElement("Name"); 
+                subElement6.InnerText = pr.Name; 
+                e.AppendChild(subElement6); 
 
-                XmlNode subElement7 = document.CreateElement("Description"); // даём имя
-                subElement7.InnerText = pr.Description; // и значение
-                e.AppendChild(subElement7); // и указываем кому принадлежит
+                XmlNode subElement7 = document.CreateElement("Description"); 
+                subElement7.InnerText = pr.Description; 
+                e.AppendChild(subElement7); 
 
-                XmlNode subElement8 = document.CreateElement("Price"); // даём имя
-                subElement8.InnerText = pr.Price; // и значение
-                e.AppendChild(subElement8); // и указываем кому принадлежит
+                XmlNode subElement8 = document.CreateElement("Price"); 
+                subElement8.InnerText = pr.Price; 
+                e.AppendChild(subElement8); 
 
-                XmlNode subElement9 = document.CreateElement("Photos"); // даём имя
-                e.AppendChild(subElement9); // и указываем кому принадлежит
+                XmlNode subElement9 = document.CreateElement("Photos"); 
+                e.AppendChild(subElement9); 
                 if (pr.Photos != null && pr.Photos.Any())
                 {
                     foreach (var photo in pr.Photos)
                     {
-                        XmlNode subElement10 = document.CreateElement("Photo"); // даём имя
-                        subElement10.InnerText = photo; // и значение
-                        subElement9.AppendChild(subElement10); // и указываем кому принадлежит
+                        XmlNode subElement10 = document.CreateElement("Photo"); 
+                        subElement10.InnerText = photo; 
+                        subElement9.AppendChild(subElement10); 
                     }
                 }
-                element.AppendChild(e); // и указываем кому принадлежит
+                element.AppendChild(e); 
             });
             document.Save(fileName);
             
